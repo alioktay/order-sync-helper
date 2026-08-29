@@ -1,0 +1,6 @@
+.env
+bin/
+tmp/
+dashboard/web/dist/
+dashboard/web/node_modules/
+*.test

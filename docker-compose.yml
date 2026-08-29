@@ -1,0 +1,52 @@
+services:
+  dashboard:
+    build: ./dashboard
+    environment:
+      PORT: 3001
+      DATABASE_URL: ${ORDER_SYNC_DATABASE_URL:-postgresql://order_sync:order_sync@postgres:5432/order_sync}
+      ORDER_SYNC_URL: http://order-sync:3000
+      MOCK_SAP_URL: http://mock-sap:4000
+      HARDWARE_SYNC_DELAY_SECONDS: ${HARDWARE_SYNC_DELAY_SECONDS:-30}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      UI_DIST_DIR: /app/web/dist
+    ports:
+      - "${DASHBOARD_PORT:-3001}:3001"
+    networks:
+      - order-sync-shared
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mock-sap:
+    build: ./mock-sap
+    environment:
+      PORT: 4000
+      MOCK_SAP_MODE: ${MOCK_SAP_MODE:-success}
+      MOCK_SAP_DELAY_MS: ${MOCK_SAP_DELAY_MS:-0}
+    ports:
+      - "${MOCK_SAP_PORT:-4000}:4000"
+    networks:
+      - order-sync-shared
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  adminer:
+    image: adminer:6.0.1-standalone
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    networks:
+      - order-sync-shared
+    restart: unless-stopped
+
+networks:
+  order-sync-shared:
+    name: order-sync-shared

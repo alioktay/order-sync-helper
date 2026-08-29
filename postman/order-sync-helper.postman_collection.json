@@ -1,0 +1,20 @@
+{
+  "info": {"name":"order-sync-dashboard-helpers", "schema":"https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "item":[
+    {"name":"Workflow dashboard","item":[
+      {"name":"Health","request":{"method":"GET","url":"{{dashboardUrl}}/health"}},
+      {"name":"Summary","request":{"method":"GET","url":"{{dashboardUrl}}/api/dashboard/summary"}},
+      {"name":"Orders","request":{"method":"GET","url":"{{dashboardUrl}}/api/dashboard/orders"}},
+      {"name":"Workflow","request":{"method":"GET","url":"{{dashboardUrl}}/api/dashboard/orders/{{orderId}}/workflow"}}
+    ]},
+    {"name":"Mock SAP","item":[
+      {"name":"Health","request":{"method":"GET","url":"{{mockSapUrl}}/health"}},
+      {"name":"Orders","request":{"method":"GET","url":"{{mockSapUrl}}/api/orders"}}
+    ]},
+    {"name":"Webhook simulator","item":[
+      {"name":"Create order","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"event_id\":\"evt-order-1\",\"order_id\":\"ORD-1\",\"customer_email\":\"test@example.com\",\"items\":[{\"sku\":\"DEMO-SL3\",\"quantity\":1,\"price\":169,\"isHardware\":true}]}"},"url":"{{dashboardUrl}}/api/dashboard/simulations/order"}},
+      {"name":"Send payment","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"event_id\":\"evt-payment-1\",\"reference_order_id\":\"ORD-1\",\"payment_status\":\"PENDING\",\"timestamp\":\"2026-08-29T04:00:00Z\"}"},"url":"{{dashboardUrl}}/api/dashboard/simulations/payment"}}
+    ]},
+    {"name":"Adminer","description":"Open http://localhost:8080 and connect to postgres:5432 using order_sync/order_sync, database order_sync."}
+  ]
+}
