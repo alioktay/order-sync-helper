@@ -14,6 +14,7 @@ type Config struct {
 	DatabaseURL          string
 	OrderSyncURL         string
 	MockSAPURL           string
+	MockSAPAdminToken    string
 	HardwareDelaySeconds int
 	WebhookSecret        string
 	UIPath               string
@@ -33,6 +34,7 @@ func loadConfig() (Config, error) {
 		DatabaseURL:          os.Getenv("DATABASE_URL"),
 		OrderSyncURL:         stringEnv("ORDER_SYNC_URL", "http://localhost:3000"),
 		MockSAPURL:           stringEnv("MOCK_SAP_URL", "http://localhost:4000"),
+		MockSAPAdminToken:    stringEnv("MOCK_SAP_ADMIN_TOKEN", "local-dashboard-token"),
 		HardwareDelaySeconds: hardwareDelay,
 		WebhookSecret:        os.Getenv("WEBHOOK_SECRET"),
 		UIPath:               stringEnv("UI_DIST_DIR", "./web/dist"),

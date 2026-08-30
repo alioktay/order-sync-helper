@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 )
 
@@ -32,6 +33,43 @@ func TestRunOrderSendsEditableShopPayload(t *testing.T) {
 	}
 	if got["event_id"] != "shop-event" || got["order_id"] != "order-1" {
 		t.Fatalf("payload = %+v", got)
+	}
+	items, ok := got["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("items = %+v", got["items"])
+	}
+	if _, present := items[0].(map[string]any)["isHardware"]; present {
+		t.Fatalf("isHardware should be omitted: %+v", items[0])
+	}
+}
+
+func TestRunOrderPreservesExplicitHardwareValues(t *testing.T) {
+	for _, want := range []bool{true, false} {
+		t.Run(strconv.FormatBool(want), func(t *testing.T) {
+			var got map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Fatal(err)
+				}
+				w.WriteHeader(http.StatusCreated)
+				_, _ = w.Write([]byte(`{"message":"Order stored"}`))
+			}))
+			defer server.Close()
+
+			simulator := NewSimulator(Config{OrderSyncURL: server.URL})
+			value := want
+			_, err := simulator.RunOrder(context.Background(), OrderSimulationRequest{Items: []SimulationItem{{IsHardware: &value}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			items, ok := got["items"].([]any)
+			if !ok || len(items) != 1 {
+				t.Fatalf("items = %+v", got["items"])
+			}
+			if gotValue := items[0].(map[string]any)["isHardware"]; gotValue != want {
+				t.Fatalf("isHardware = %v, want %v", gotValue, want)
+			}
+		})
 	}
 }
 

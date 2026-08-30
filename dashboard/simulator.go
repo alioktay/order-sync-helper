@@ -35,7 +35,7 @@ type SimulationItem struct {
 	SKU        string  `json:"sku"`
 	Quantity   int     `json:"quantity"`
 	Price      float64 `json:"price"`
-	IsHardware bool    `json:"isHardware"`
+	IsHardware *bool   `json:"isHardware,omitempty"`
 }
 
 type WebhookSimulationResponse struct {

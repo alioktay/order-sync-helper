@@ -8,6 +8,7 @@ services:
       DATABASE_URL: ${ORDER_SYNC_DATABASE_URL:-postgresql://order_sync:order_sync@postgres:5432/order_sync}
       ORDER_SYNC_URL: http://order-sync:3000
       MOCK_SAP_URL: http://mock-sap:4000
+      MOCK_SAP_ADMIN_TOKEN: ${MOCK_SAP_ADMIN_TOKEN:?MOCK_SAP_ADMIN_TOKEN must be set in the production environment}
       HARDWARE_SYNC_DELAY_SECONDS: ${HARDWARE_SYNC_DELAY_SECONDS:-30}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:?WEBHOOK_SECRET must be set in the production environment}
       UI_DIST_DIR: /app/web/dist
@@ -53,6 +54,7 @@ services:
       PORT: 4000
       MOCK_SAP_MODE: ${MOCK_SAP_MODE:-success}
       MOCK_SAP_DELAY_MS: ${MOCK_SAP_DELAY_MS:-0}
+      MOCK_SAP_ADMIN_TOKEN: ${MOCK_SAP_ADMIN_TOKEN:?MOCK_SAP_ADMIN_TOKEN must be set in the production environment}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=web_network"

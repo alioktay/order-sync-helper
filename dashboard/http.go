@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -11,7 +14,18 @@ import (
 )
 
 func NewRouter(repository *Repository, simulator *Simulator, uiPath string, hardwareDelaySeconds ...int) *gin.Engine {
-	delaySeconds := dashboardDelaySeconds(hardwareDelaySeconds)
+	return newRouter(repository, simulator, uiPath, dashboardDelaySeconds(hardwareDelaySeconds))
+}
+
+func NewRouterWithMockSAP(repository *Repository, simulator *Simulator, uiPath string, hardwareDelaySeconds int, mockSAPURL, mockSAPToken string) *gin.Engine {
+	return newRouter(repository, simulator, uiPath, hardwareDelaySeconds, mockSAPURL, mockSAPToken)
+}
+
+func newRouter(repository *Repository, simulator *Simulator, uiPath string, delaySeconds int, mockSAPConfig ...string) *gin.Engine {
+	mockSAPURL, mockSAPToken := "", ""
+	if len(mockSAPConfig) >= 2 {
+		mockSAPURL, mockSAPToken = mockSAPConfig[0], mockSAPConfig[1]
+	}
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.GET("/health", func(c *gin.Context) {
@@ -29,6 +43,9 @@ func NewRouter(repository *Repository, simulator *Simulator, uiPath string, hard
 	api.GET("/orders/:orderId/workflow", workflowHandler(repository, delaySeconds))
 	api.POST("/simulations/order", orderSimulationHandler(simulator))
 	api.POST("/simulations/payment", paymentSimulationHandler(simulator))
+	api.GET("/mock-sap/response", mockSAPResponseHandler(mockSAPURL, mockSAPToken))
+	api.PUT("/mock-sap/response", mockSAPResponseHandler(mockSAPURL, mockSAPToken))
+	api.DELETE("/mock-sap/response", mockSAPResponseHandler(mockSAPURL, mockSAPToken))
 
 	indexPath := filepath.Join(uiPath, "index.html")
 	router.GET("/", func(c *gin.Context) { c.File(indexPath) })
@@ -41,6 +58,44 @@ func NewRouter(repository *Repository, simulator *Simulator, uiPath string, hard
 		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
 	})
 	return router
+}
+
+func mockSAPResponseHandler(baseURL, token string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if baseURL == "" {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Mock SAP URL is not configured"})
+			return
+		}
+		target, err := url.JoinPath(strings.TrimRight(baseURL, "/"), "/api/admin/response")
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Invalid Mock SAP URL"})
+			return
+		}
+		var body io.Reader
+		if c.Request.Body != nil {
+			data, readErr := io.ReadAll(c.Request.Body)
+			if readErr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Unable to read request"})
+				return
+			}
+			body = bytes.NewReader(data)
+		}
+		req, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, target, body)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to create Mock SAP request"})
+			return
+		}
+		req.Header.Set("X-Mock-SAP-Admin-Token", token)
+		req.Header.Set("Content-Type", "application/json")
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to reach Mock SAP", "detail": err.Error()})
+			return
+		}
+		defer response.Body.Close()
+		data, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		c.Data(response.StatusCode, response.Header.Get("Content-Type"), data)
+	}
 }
 
 func summaryHandler(repository *Repository, hardwareDelaySeconds ...int) gin.HandlerFunc {

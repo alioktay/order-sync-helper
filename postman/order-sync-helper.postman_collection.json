@@ -9,10 +9,13 @@
     ]},
     {"name":"Mock SAP","item":[
       {"name":"Health","request":{"method":"GET","url":"{{mockSapUrl}}/health"}},
-      {"name":"Orders","request":{"method":"GET","url":"{{mockSapUrl}}/api/orders"}}
+      {"name":"Orders","request":{"method":"GET","url":"{{mockSapUrl}}/api/orders"}},
+      {"name":"Get pending response override","request":{"method":"GET","header":[{"key":"X-Mock-SAP-Admin-Token","value":"{{mockSapAdminToken}}"}],"url":"{{mockSapUrl}}/api/admin/response"}},
+      {"name":"Set persistent SAP rate limit override","request":{"method":"PUT","header":[{"key":"Content-Type","value":"application/json"},{"key":"X-Mock-SAP-Admin-Token","value":"{{mockSapAdminToken}}"}],"body":{"mode":"raw","raw":"{\"status_code\":429,\"body\":{\"status\":\"error\",\"message\":\"rate limited\"},\"retry_after\":\"7\"}"},"url":"{{mockSapUrl}}/api/admin/response"}},
+      {"name":"Clear response override","request":{"method":"DELETE","header":[{"key":"X-Mock-SAP-Admin-Token","value":"{{mockSapAdminToken}}"}],"url":"{{mockSapUrl}}/api/admin/response"}}
     ]},
     {"name":"Webhook simulator","item":[
-      {"name":"Create order","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"event_id\":\"evt-order-1\",\"order_id\":\"ORD-1\",\"customer_email\":\"test@example.com\",\"items\":[{\"sku\":\"DEMO-SL3\",\"quantity\":1,\"price\":169,\"isHardware\":true}]}"},"url":"{{dashboardUrl}}/api/dashboard/simulations/order"}},
+      {"name":"Create order","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"event_id\":\"evt-order-1\",\"order_id\":\"ORD-1\",\"customer_email\":\"test@example.com\",\"items\":[{\"sku\":\"NUKI-SL3\",\"quantity\":1,\"price\":169,\"isHardware\":true}]}"},"url":"{{dashboardUrl}}/api/dashboard/simulations/order"}},
       {"name":"Send payment","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"event_id\":\"evt-payment-1\",\"reference_order_id\":\"ORD-1\",\"payment_status\":\"PENDING\",\"timestamp\":\"2026-08-29T04:00:00Z\"}"},"url":"{{dashboardUrl}}/api/dashboard/simulations/payment"}}
     ]},
     {"name":"Adminer","description":"Open http://localhost:8080 and connect to postgres:5432 using order_sync/order_sync, database order_sync."}

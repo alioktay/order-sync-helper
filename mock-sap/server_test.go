@@ -141,6 +141,82 @@ func TestMockSAPRoutesAndModes(t *testing.T) {
 	})
 }
 
+func TestResponseOverrideIsAuthenticatedAndPersistent(t *testing.T) {
+	server := NewServer(Config{AdminToken: "secret", DelayMS: 50})
+	router := NewRouter(server)
+	payload := `{"status_code":429,"body":{"status":"error"},"retry_after":"7","delay_ms":0}`
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/response", strings.NewReader(payload))
+	request.Header.Set("X-Mock-SAP-Admin-Token", "secret")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("put status = %d: %s", response.Code, response.Body)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/api/orders", nil)
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") != "7" {
+		t.Fatalf("override response = %d, headers=%v", response.Code, response.Header())
+	}
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/orders", nil))
+	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") != "7" {
+		t.Fatalf("persistent response = %d, headers=%v", response.Code, response.Header())
+	}
+}
+
+func TestResponseOverrideSurvivesCancellation(t *testing.T) {
+	server := NewServer(Config{AdminToken: "secret"})
+	server.override = &ResponseOverride{StatusCode: http.StatusCreated, Body: json.RawMessage(`{"status":"success"}`), DelayMS: ptr(100)}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	router := NewRouter(server)
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/orders", nil).WithContext(ctx))
+	if server.override == nil {
+		t.Fatal("cancelled request cleared override")
+	}
+}
+
+func TestResponseOverrideIsSharedAcrossConcurrentOrders(t *testing.T) {
+	server := NewServer(Config{AdminToken: "secret"})
+	server.override = &ResponseOverride{StatusCode: http.StatusBadGateway, Body: json.RawMessage(`{"status":"error"}`)}
+	router := NewRouter(server)
+	results := make(chan int, 8)
+	for i := 0; i < cap(results); i++ {
+		go func() {
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/orders", nil))
+			results <- response.Code
+		}()
+	}
+	for i := 0; i < cap(results); i++ {
+		if code := <-results; code != http.StatusBadGateway {
+			t.Fatalf("concurrent response = %d", code)
+		}
+	}
+}
+
+func TestResponseOverrideDeleteRestoresConfiguredMode(t *testing.T) {
+	server := NewServer(Config{AdminToken: "secret", Mode: "error"})
+	server.override = &ResponseOverride{StatusCode: http.StatusCreated, Body: json.RawMessage(`{"status":"success"}`)}
+	router := NewRouter(server)
+	request := httptest.NewRequest(http.MethodDelete, "/api/admin/response", nil)
+	request.Header.Set("X-Mock-SAP-Admin-Token", "secret")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("delete status = %d", response.Code)
+	}
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/orders", nil))
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("post-reset status = %d", response.Code)
+	}
+}
+
+func ptr(value int) *int { return &value }
+
 func TestHTTPServerAndLifecycle(t *testing.T) {
 	router := gin.New()
 	server := NewHTTPServer(router, Config{Port: 4400})

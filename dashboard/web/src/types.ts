@@ -81,7 +81,7 @@ export interface SimulationItem {
   sku: string
   quantity: number
   price: number
-  isHardware: boolean
+  isHardware?: boolean
 }
 
 export interface OrderSimulationRequest {
@@ -109,4 +109,11 @@ export interface WebhookSimulationResponse {
 
 export interface SimulationResult {
   order_id: string
+}
+
+export interface MockSapResponseOverride {
+  status_code: number
+  body: Record<string, unknown>
+  retry_after?: string
+  delay_ms?: number
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -21,9 +22,19 @@ import (
 )
 
 type Config struct {
-	Port    int
-	Mode    string
-	DelayMS int
+	Port       int
+	Mode       string
+	DelayMS    int
+	AdminToken string
+}
+
+const maxOverrideDelayMS = 60_000
+
+type ResponseOverride struct {
+	StatusCode int             `json:"status_code"`
+	Body       json.RawMessage `json:"body"`
+	RetryAfter *string         `json:"retry_after,omitempty"`
+	DelayMS    *int            `json:"delay_ms,omitempty"`
 }
 
 type received struct {
@@ -36,6 +47,7 @@ type Server struct {
 	cfg      Config
 	logger   *slog.Logger
 	received map[string]received
+	override *ResponseOverride
 	mu       sync.Mutex
 }
 
@@ -49,9 +61,10 @@ func LoadConfig() (Config, error) {
 		return Config{}, err
 	}
 	cfg := Config{
-		Port:    port,
-		Mode:    strings.ToLower(envOrDefault("MOCK_SAP_MODE", "success")),
-		DelayMS: delay,
+		Port:       port,
+		Mode:       strings.ToLower(envOrDefault("MOCK_SAP_MODE", "success")),
+		DelayMS:    delay,
+		AdminToken: os.Getenv("MOCK_SAP_ADMIN_TOKEN"),
 	}
 	if cfg.Port <= 0 || cfg.DelayMS < 0 {
 		return Config{}, fmt.Errorf("numeric configuration values are invalid")
@@ -73,6 +86,9 @@ func NewRouter(server *Server) *gin.Engine {
 	router.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 	router.POST("/api/orders", server.orders)
 	router.GET("/api/orders", server.list)
+	router.GET("/api/admin/response", server.getResponseOverride)
+	router.PUT("/api/admin/response", server.putResponseOverride)
+	router.DELETE("/api/admin/response", server.deleteResponseOverride)
 	return router
 }
 
@@ -170,10 +186,26 @@ func RegisterLifecycle(lc fx.Lifecycle, server *http.Server) {
 }
 
 func (s *Server) orders(c *gin.Context) {
+	override := s.currentOverride()
 	var body struct {
 		OrderID string `json:"order_id"`
 	}
 	_ = c.ShouldBindJSON(&body)
+
+	if override != nil {
+		delay := s.cfg.DelayMS
+		if override.DelayMS != nil {
+			delay = *override.DelayMS
+		}
+		if !waitDelay(c, delay) {
+			return
+		}
+		if override.RetryAfter != nil {
+			c.Header("Retry-After", *override.RetryAfter)
+		}
+		c.Data(override.StatusCode, "application/json; charset=utf-8", override.Body)
+		return
+	}
 
 	mode := c.Query("mode")
 	if mode == "" {
@@ -183,14 +215,8 @@ func (s *Server) orders(c *gin.Context) {
 	if value := c.Query("delay_ms"); value != "" {
 		delay, _ = strconv.Atoi(value)
 	}
-	if delay > 0 {
-		timer := time.NewTimer(time.Duration(delay) * time.Millisecond)
-		select {
-		case <-timer.C:
-		case <-c.Request.Context().Done():
-			timer.Stop()
-			return
-		}
+	if !waitDelay(c, delay) {
+		return
 	}
 	if mode == "timeout" {
 		<-c.Request.Context().Done()
@@ -212,6 +238,83 @@ func (s *Server) orders(c *gin.Context) {
 		s.received[key] = result
 	}
 	c.JSON(http.StatusCreated, result)
+}
+
+func waitDelay(c *gin.Context, delay int) bool {
+	if delay <= 0 {
+		return true
+	}
+	timer := time.NewTimer(time.Duration(delay) * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-c.Request.Context().Done():
+		return false
+	}
+}
+
+func (s *Server) currentOverride() *ResponseOverride {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.override == nil {
+		return nil
+	}
+	override := *s.override
+	if s.override.Body != nil {
+		override.Body = append(json.RawMessage(nil), s.override.Body...)
+	}
+	return &override
+}
+
+func (s *Server) authorized(c *gin.Context) bool {
+	if s.cfg.AdminToken == "" || c.GetHeader("X-Mock-SAP-Admin-Token") != s.cfg.AdminToken {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid admin token"})
+		return false
+	}
+	return true
+}
+
+func (s *Server) getResponseOverride(c *gin.Context) {
+	if !s.authorized(c) {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.override == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no response override pending"})
+		return
+	}
+	c.JSON(http.StatusOK, s.override)
+}
+
+func (s *Server) putResponseOverride(c *gin.Context) {
+	if !s.authorized(c) {
+		return
+	}
+	var override ResponseOverride
+	if err := c.ShouldBindJSON(&override); err != nil || override.StatusCode < 200 || override.StatusCode > 599 || len(override.Body) == 0 || !json.Valid(override.Body) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "status_code must be 200-599 and body must be valid JSON"})
+		return
+	}
+	if override.DelayMS != nil && (*override.DelayMS < 0 || *override.DelayMS > maxOverrideDelayMS) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "delay_ms must be between 0 and 60000"})
+		return
+	}
+	s.mu.Lock()
+	s.override = &override
+	s.mu.Unlock()
+	c.JSON(http.StatusOK, override)
+}
+
+func (s *Server) deleteResponseOverride(c *gin.Context) {
+	if !s.authorized(c) {
+		return
+	}
+	s.mu.Lock()
+	s.override = nil
+	s.mu.Unlock()
+	c.Status(http.StatusNoContent)
 }
 
 func (s *Server) list(c *gin.Context) {

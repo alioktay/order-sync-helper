@@ -6,6 +6,7 @@ import type {
   WebhookSimulationResponse,
   Summary,
   Workflow,
+  MockSapResponseOverride,
 } from './types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -23,6 +24,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new Error(message)
   }
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
@@ -58,4 +60,12 @@ export function sendPaymentSimulation(input: PaymentSimulationRequest): Promise<
     method: 'POST',
     body: JSON.stringify(input),
   })
+}
+
+export function getMockSapResponse(): Promise<MockSapResponseOverride> { return request('/api/dashboard/mock-sap/response') }
+export function setMockSapResponse(input: MockSapResponseOverride): Promise<MockSapResponseOverride> {
+  return request('/api/dashboard/mock-sap/response', { method: 'PUT', body: JSON.stringify(input) })
+}
+export function clearMockSapResponse(): Promise<void> {
+  return request('/api/dashboard/mock-sap/response', { method: 'DELETE' })
 }

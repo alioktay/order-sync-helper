@@ -35,7 +35,7 @@ func main() {
 
 	repository := NewRepository(pool)
 	simulator := NewSimulator(cfg)
-	router := NewRouter(repository, simulator, cfg.UIPath, cfg.HardwareDelaySeconds)
+	router := NewRouterWithMockSAP(repository, simulator, cfg.UIPath, cfg.HardwareDelaySeconds, cfg.MockSAPURL, cfg.MockSAPAdminToken)
 	server := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.Port),
 		Handler:           router,

@@ -101,9 +101,9 @@ h3 { color: var(--ink); font-size: 16px; letter-spacing: -.025em; margin: 0; }
 .field { min-width: 0; display: grid; gap: 7px; }
 .field-label { min-height: 15px; display: flex; align-items: baseline; gap: 6px; color: #757c73; font-size: 11px; font-weight: 600; }
 .field-hint { color: #a3aaa1; font-size: 10px; font-weight: 400; }
-input, select { width: 100%; min-height: 39px; color: var(--ink); border: 1px solid #d9ddd4; background: #fbfcf9; border-radius: 10px; padding: 9px 11px; outline: none; font-size: 12px; transition: border .2s, box-shadow .2s; }
+input, select, textarea { width: 100%; min-height: 39px; color: var(--ink); border: 1px solid #d9ddd4; background: #fbfcf9; border-radius: 10px; padding: 9px 11px; outline: none; font-size: 12px; transition: border .2s, box-shadow .2s; }
 input::placeholder { color: #a8aea6; }
-input:focus, select:focus { border-color: #6f9e7a; box-shadow: 0 0 0 3px rgba(111, 158, 122, .14); }
+input:focus, select:focus, textarea:focus { border-color: #6f9e7a; box-shadow: 0 0 0 3px rgba(111, 158, 122, .14); }
 .item-editor { border-top: 1px solid #e4e6df; margin-top: 18px; padding-top: 16px; }
 .item-editor-heading { display: flex; align-items: center; justify-content: space-between; color: #767d74; font-size: 11px; font-weight: 700; margin-bottom: 9px; }
 .item-input-row { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(100px, .65fr) minmax(120px, .8fr) minmax(100px, .6fr) 36px; gap: 9px; align-items: end; margin-bottom: 7px; }
@@ -318,7 +318,7 @@ input:focus, select:focus { border-color: #6f9e7a; box-shadow: 0 0 0 3px rgba(11
   .simulation-fields { grid-template-columns: 1fr; }
   .item-input-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px; }
   .item-input-row .field:first-child { grid-column: 1 / -1; }
-  .item-hardware-field { grid-column: 1 / 3; justify-content: flex-start; }
+  .item-hardware-field { grid-column: 1 / 3; }
   .item-input-row .icon-button { grid-column: 3; grid-row: 2; }
   .payment-grid { grid-template-columns: 1fr; }
   .advanced-grid { grid-template-columns: 1fr; }
