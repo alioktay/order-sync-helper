@@ -1,0 +1,98 @@
+services:
+  dashboard:
+    build:
+      context: ./dashboard
+    container_name: order-sync-dashboard
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      DATABASE_URL: ${ORDER_SYNC_DATABASE_URL:-postgresql://order_sync:order_sync@postgres:5432/order_sync}
+      ORDER_SYNC_URL: http://order-sync:3000
+      MOCK_SAP_URL: http://mock-sap:4000
+      HARDWARE_SYNC_DELAY_SECONDS: ${HARDWARE_SYNC_DELAY_SECONDS:-30}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:?WEBHOOK_SECRET must be set in the production environment}
+      UI_DIST_DIR: /app/web/dist
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web_network"
+
+      # Security headers and HTTPS redirect
+      - "traefik.http.middlewares.order-sync-dashboard-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.middlewares.order-sync-dashboard-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.order-sync-dashboard-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.order-sync-dashboard-redirect.redirectscheme.permanent=true"
+
+      # HTTP -> HTTPS redirect
+      - "traefik.http.routers.order-sync-dashboard-http.rule=Host(`order-sync-helper.alioktay.com`)"
+      - "traefik.http.routers.order-sync-dashboard-http.entrypoints=web"
+      - "traefik.http.routers.order-sync-dashboard-http.middlewares=order-sync-dashboard-redirect"
+      - "traefik.http.routers.order-sync-dashboard-http.service=order-sync-dashboard"
+
+      # HTTPS dashboard
+      - "traefik.http.routers.order-sync-dashboard.rule=Host(`order-sync-helper.alioktay.com`)"
+      - "traefik.http.routers.order-sync-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.order-sync-dashboard.tls=true"
+      - "traefik.http.routers.order-sync-dashboard.tls.certresolver=myresolver"
+      - "traefik.http.routers.order-sync-dashboard.middlewares=order-sync-dashboard-headers"
+      - "traefik.http.routers.order-sync-dashboard.service=order-sync-dashboard"
+      - "traefik.http.services.order-sync-dashboard.loadbalancer.server.port=3001"
+    networks:
+      - order-sync-shared
+      - web_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  mock-sap:
+    image: ${ORDER_SYNC_IMAGE_PREFIX:-ghcr.io/alioktay/order-sync-helper}-mock-sap:${ORDER_SYNC_IMAGE_TAG:-latest}
+    build:
+      context: ./mock-sap
+    container_name: order-sync-mock-sap
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      MOCK_SAP_MODE: ${MOCK_SAP_MODE:-success}
+      MOCK_SAP_DELAY_MS: ${MOCK_SAP_DELAY_MS:-0}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web_network"
+
+      # Security headers and HTTPS redirect
+      - "traefik.http.middlewares.mock-sap-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.middlewares.mock-sap-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.mock-sap-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.mock-sap-redirect.redirectscheme.permanent=true"
+
+      # HTTP -> HTTPS redirect
+      - "traefik.http.routers.mock-sap-http.rule=Host(`mock-sap.alioktay.com`)"
+      - "traefik.http.routers.mock-sap-http.entrypoints=web"
+      - "traefik.http.routers.mock-sap-http.middlewares=mock-sap-redirect"
+      - "traefik.http.routers.mock-sap-http.service=mock-sap"
+
+      # HTTPS mock-SAP API
+      - "traefik.http.routers.mock-sap.rule=Host(`mock-sap.alioktay.com`)"
+      - "traefik.http.routers.mock-sap.entrypoints=websecure"
+      - "traefik.http.routers.mock-sap.tls=true"
+      - "traefik.http.routers.mock-sap.tls.certresolver=myresolver"
+      - "traefik.http.routers.mock-sap.middlewares=mock-sap-headers"
+      - "traefik.http.routers.mock-sap.service=mock-sap"
+      - "traefik.http.services.mock-sap.loadbalancer.server.port=4000"
+    networks:
+      - order-sync-shared
+      - web_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+networks:
+  order-sync-shared:
+    name: order-sync-shared
+    external: true
+  web_network:
+    external: true
