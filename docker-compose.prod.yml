@@ -47,7 +47,6 @@ services:
       start_period: 10s
 
   mock-sap:
-    image: ${ORDER_SYNC_IMAGE_PREFIX:-ghcr.io/alioktay/order-sync-helper}-mock-sap:${ORDER_SYNC_IMAGE_TAG:-latest}
     build:
       context: ./mock-sap
     container_name: order-sync-mock-sap
