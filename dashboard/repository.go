@@ -79,8 +79,8 @@ func (r *Repository) Summary(ctx context.Context) (Summary, error) {
 	err := r.pool.QueryRow(ctx, `
 		SELECT
 			COUNT(*) AS total_orders,
-			COUNT(*) FILTER (WHERE o.status = 'PAID' AND j.status = 'SYNCED') AS completed_orders,
-			COUNT(*) FILTER (WHERE o.status = 'PENDING') AS pending_orders,
+			COUNT(*) FILTER (WHERE o.payment_status = 'PAID' AND j.status = 'SYNCED') AS completed_orders,
+			COUNT(*) FILTER (WHERE o.payment_status = 'PENDING') AS pending_orders,
 			COUNT(*) FILTER (WHERE j.status = 'PROCESSING') AS processing_jobs,
 			COUNT(*) FILTER (WHERE j.status IN ('PENDING', 'WAITING') AND j.last_error IS NOT NULL) AS retrying_jobs,
 			COUNT(*) FILTER (WHERE j.status = 'WAITING') AS waiting_jobs,
@@ -114,7 +114,7 @@ func (r *Repository) ListOrders(ctx context.Context, query, status string, limit
 	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT
-			o.order_id, o.customer_email, o.status, COALESCE(p.status, 'NOT_RECEIVED'), o.paid_at, o.created_at, o.updated_at,
+			o.order_id, o.customer_email, o.payment_status, COALESCE(p.status, 'NOT_RECEIVED'), o.paid_at, o.created_at, o.updated_at,
 			COALESCE(j.status, 'NOT_SCHEDULED'), j.due_at, j.attempts, j.last_error,
 			j.sap_internal_id, j.synced_at, COUNT(i.id), COALESCE(SUM(i.quantity * i.price), 0)::float8,
 			COALESCE(BOOL_OR(COALESCE(i.is_hardware, sc.category = 'HARDWARE', false)), false)
@@ -124,7 +124,7 @@ func (r *Repository) ListOrders(ctx context.Context, query, status string, limit
 		LEFT JOIN order_items i ON i.order_id = o.id
 		LEFT JOIN sku_classifications sc ON sc.sku = i.sku
 		WHERE ($1 = '' OR o.order_id ILIKE '%' || $1 || '%' OR o.customer_email ILIKE '%' || $1 || '%')
-		  AND (($2 = 'CANCELLED' AND o.status = 'CANCELLED')
+		  AND (($2 = 'CANCELLED' AND o.payment_status = 'CANCELLED')
 		    OR ($2 <> 'CANCELLED' AND ($2 = '' OR COALESCE(j.status, 'NOT_SCHEDULED') = $2)))
 		GROUP BY o.id, o.created_at, j.id, p.id
 		ORDER BY o.created_at DESC
@@ -152,7 +152,7 @@ func (r *Repository) GetOrder(ctx context.Context, orderID string) (OrderDetail,
 	var detail OrderDetail
 	row := r.pool.QueryRow(ctx, `
 		SELECT
-			o.order_id, o.customer_email, o.status, COALESCE(p.status, 'NOT_RECEIVED'), o.paid_at, o.created_at, o.updated_at,
+			o.order_id, o.customer_email, o.payment_status, COALESCE(p.status, 'NOT_RECEIVED'), o.paid_at, o.created_at, o.updated_at,
 			COALESCE(j.status, 'NOT_SCHEDULED'), j.due_at, j.attempts, j.last_error,
 			j.sap_internal_id, j.synced_at, COUNT(i.id), COALESCE(SUM(i.quantity * i.price), 0)::float8,
 			COALESCE(BOOL_OR(COALESCE(i.is_hardware, sc.category = 'HARDWARE', false)), false)
