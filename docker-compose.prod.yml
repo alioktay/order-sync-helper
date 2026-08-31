@@ -89,9 +89,44 @@ services:
       retries: 12
       start_period: 5s
 
+  adminer:
+    image: adminer:6.0.1-standalone
+    container_name: order-sync-adminer
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web_network"
+
+      # Security headers and HTTPS redirect
+      - "traefik.http.middlewares.adminer-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.middlewares.adminer-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.adminer-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.adminer-redirect.redirectscheme.permanent=true"
+
+      # HTTP -> HTTPS redirect
+      - "traefik.http.routers.adminer-http.rule=Host(`adminer.alioktay.com`)"
+      - "traefik.http.routers.adminer-http.entrypoints=web"
+      - "traefik.http.routers.adminer-http.middlewares=adminer-redirect"
+      - "traefik.http.routers.adminer-http.service=adminer"
+
+      # HTTPS Adminer
+      - "traefik.http.routers.adminer.rule=Host(`adminer.alioktay.com`)"
+      - "traefik.http.routers.adminer.entrypoints=websecure"
+      - "traefik.http.routers.adminer.tls=true"
+      - "traefik.http.routers.adminer.tls.certresolver=myresolver"
+      - "traefik.http.routers.adminer.middlewares=adminer-headers"
+      - "traefik.http.routers.adminer.service=adminer"
+      - "traefik.http.services.adminer.loadbalancer.server.port=8080"
+    networks:
+      - order-sync-shared
+      - web_network
+
 networks:
   order-sync-shared:
     name: order-sync-shared
     external: true
   web_network:
     external: true
+
